@@ -1,0 +1,45 @@
+name: manage
+# Administra clientes y posiciones desde el celular: Actions > manage > Run workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "Comando"
+        type: choice
+        options: [add-client, list-clients, fill, close, events, check-data]
+      args:
+        description: 'Argumentos. Ej: "Ana" 5000 --risk 1.0 --fractional   |   1 NVDA 3 --price 180.5 --stop 170.2'
+        type: string
+        default: ""
+permissions:
+  contents: read
+concurrency:
+  group: quant-scanner-state
+  cancel-in-progress: false
+jobs:
+  manage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - uses: actions/cache@v4
+        with:
+          path: state
+          key: qs-state-${{ github.run_id }}
+          restore-keys: qs-state-
+      - name: Ejecutar
+        env:
+          QS_DB: state/quant_scanner.db
+          QS_ENCRYPTION_KEY: ${{ secrets.QS_ENCRYPTION_KEY }}
+          QS_CMD: ${{ inputs.command }}
+          QS_ARGS: ${{ inputs.args }}
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+          TIINGO_TOKEN: ${{ secrets.TIINGO_TOKEN }}
+        run: |
+          mkdir -p state
+          python scripts/gh_manage.py

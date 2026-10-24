@@ -1,0 +1,49 @@
+name: daily-scan
+# Corre de lunes a viernes a las 21:30 UTC = 17:30 ET (verano) / 16:30 ET (invierno): DESPUÉS del cierre de EE.UU.
+# (GitHub puede demorar los cron unos minutos). También se puede lanzar a mano desde la pestaña Actions.
+on:
+  schedule:
+    - cron: "30 21 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Simulación (no envía Telegram)"
+        type: boolean
+        default: true
+permissions:
+  contents: read
+concurrency:
+  group: quant-scanner-state
+  cancel-in-progress: false
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Restaurar estado (clientes, posiciones, alertas)
+        uses: actions/cache@v4
+        with:
+          path: state
+          key: qs-state-${{ github.run_id }}
+          restore-keys: qs-state-
+      - name: Escanear
+        env:
+          QS_DB: state/quant_scanner.db
+          QS_CACHE_DIR: state/cache
+          QS_ENCRYPTION_KEY: ${{ secrets.QS_ENCRYPTION_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+          TIINGO_TOKEN: ${{ secrets.TIINGO_TOKEN }}
+          ALPACA_KEY_ID: ${{ secrets.ALPACA_KEY_ID }}
+          ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
+          DRY: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '--dry-run' || '' }}
+        run: |
+          mkdir -p state
+          python -m quant_scanner.run_daily scan $DRY

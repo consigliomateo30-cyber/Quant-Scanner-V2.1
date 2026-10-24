@@ -1,0 +1,49 @@
+name: research
+# Corre la matriz de investigación y el backtest de cartera con datos REALES (los servidores de GitHub tienen internet).
+# Resultados: en el resumen de la corrida (Actions > research > la corrida) y como archivos descargables (artifact).
+on:
+  workflow_dispatch:
+    inputs:
+      years:
+        description: "Años de historia"
+        type: string
+        default: "15"
+      dev_end:
+        description: "Fin del período de desarrollo (lo posterior queda reservado como fuera de muestra)"
+        type: string
+        default: "2021-12-31"
+permissions:
+  contents: read
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Matriz de investigación
+        env:
+          TIINGO_TOKEN: ${{ secrets.TIINGO_TOKEN }}
+          YEARS: ${{ inputs.years }}
+          DEV_END: ${{ inputs.dev_end }}
+        run: |
+          mkdir -p reports
+          python -m quant_scanner.run_daily matrix --years "$YEARS" --dev-end "$DEV_END" --out reports
+      - name: Backtest de cartera (sistema por defecto)
+        env:
+          TIINGO_TOKEN: ${{ secrets.TIINGO_TOKEN }}
+          YEARS: ${{ inputs.years }}
+        run: |
+          { echo "### Universo ETF (prueba más limpia)"; python -m quant_scanner.run_daily backtest --years "$YEARS" --capital 5000 --universe etf;
+            echo; echo "### Universo por defecto (acciones elegidas: con sesgo de supervivencia)"; python -m quant_scanner.run_daily backtest --years "$YEARS" --capital 5000; } | tee reports/backtest.txt
+      - name: Resumen
+        run: |
+          { echo "## Matriz"; cat reports/matriz.md; echo; echo "## Backtest de cartera"; echo '```'; cat reports/backtest.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reportes
+          path: reports/

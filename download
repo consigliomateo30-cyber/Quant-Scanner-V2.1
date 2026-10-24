@@ -1,0 +1,12 @@
+# secretos y datos de clientes: NUNCA al repositorio
+.env
+.streamlit/secrets.toml
+*.db
+*.db-wal
+*.db-shm
+events_override.csv
+reports/
+.qs_cache/
+*.log
+__pycache__/
+.venv/
